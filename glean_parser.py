@@ -16,7 +16,7 @@ import sys
 import os
 import re
 
-SCRIPT_VERSION = "v1.2.1"
+SCRIPT_VERSION = "v1.2.2"
 node_regex = r'topology/pod-(?P<pod>\d+)/node-(?P<node>\d+)'
 ver_regex = r'(?:dk9\.)?[1]?(?P<major1>\d)\.(?P<major2>\d)(?:\.|\()(?P<maint>\d+)\.?(?P<patch>(?:[a-b]|[0-9a-z]+))\)?'
 
@@ -760,8 +760,9 @@ def copp_switch_cli_connection(leaf,**kwargs):
 		data.append([leaf, '-', '-', '-', e])
 	try:
 		c.cmd("term len 0")
+		glean_command = r'vsh_lc -c "show system internal aclqos brcm copp entries unit 0" | egrep "^glean"'
 		c.cmd(
-			'vsh_lc -c "show system internal aclqos brcm copp entries unit 0" | egrep "glean"', timeout = 10)
+			glean_command, timeout = 10)
 		output = c.output
 		glean_stats = output.split()  
 					 
@@ -769,8 +770,8 @@ def copp_switch_cli_connection(leaf,**kwargs):
 		data.append([leaf, '-', '-', '-', e])
 		output = ''
 		return	
-	#return glean_start[29] for green packets, 30 for red packets , drops
-	return glean_stats[30]	
+	#return glean_start[20] for green packets, 21 for red packets , drops
+	return glean_stats[21]	
 
 def getDropDelta(leaf_ip, **kwargs):
 	#	Function that gets the Glean drops twice from a Switch to get the delta for counters
@@ -823,7 +824,7 @@ def switch_list(**kwargs):
 		print('GLEAN DROP DELTA		-		%s' %  glean_drop_delta)
 		print('\n')
 		if glean_drop_delta > 1:
-			activeNodes.append([topSystem['topSystem']['attributes']['name'], leafNodeId[0]['fabricNode']['attributes']['id'], topSystem['topSystem']['attributes']['oobMgmtAddr']])
+			activeNodes.append([topSystem['topSystem']['attributes']['name'], leafNodeId[0]['fabricNode']['attributes']['id'], topSystem['topSystem']['attributes']['address']])
 			
 	if not topSystems:
 		result = 'MANUAL'
@@ -838,15 +839,17 @@ def active_switch_cli_connection(activeNodes,**kwargs):
 	#	Function that takes a list of nodes and username//password input
 	#	it runs the show ip arp internal event-history event command and it saves the
 	#	the output to a file, it returns a list with the file information for each leaf
-	title = 'Connecting to ACTIVE Switches and fetching CLI output'
-	result ='FAIL_UF'
-	msg = ''
-	headers = ['Pod-ID', 'Node-ID', 'State', 'Recommended Action']
+	title = 'Connecting to Switches with Glean Drops and fetching CLI output'
+	result =''
+	headers = ['Pod-ID', 'Node-ID', 'State', ]
 	data = []
 	output_files = []
 	print_title(title)
 	print("\n")
+	count = 0
 	for activeNodeName, activeNodeId, activeNodeIP	in activeNodes:
+		count += 1
+		progress = str(count) + '/' + str(len(activeNodes))
 		node_title = 'Checking %s...' % str(activeNodeName)
 		try:
 			c = Connection(activeNodeIP)
@@ -865,11 +868,10 @@ def active_switch_cli_connection(activeNodes,**kwargs):
 			output = c.output	
 			filename = output_to_file(activeNodeName, output)
 			output_files.append([activeNodeName, activeNodeIP , filename])
-			data.append([activeNodeName, '-', '-', '-', 'Output retrieved'])
-			print_result(title, result, msg, headers, data)				 
+			data.append([activeNodeName, activeNodeId, 'Output retrieved'])
+			print_result(title, result, progress, headers, data)				 
 		except Exception as e:
-			data.append([activeNodeName, '-', '-', '-', e])
-			print_result(node_title, e)
+			data.append([activeNodeName,activeNodeId , e, '-'])
 			continue
 	return output_files
 
@@ -881,7 +883,7 @@ def active_switch_cli_connection(activeNodes,**kwargs):
 ######
 ######
 prints('	==== %s%s, Script Version %s  ====\n' % (ts, tz, SCRIPT_VERSION))
-prints('!!!! Check https://gitlab-sjc.cisco.com/jeestrad/glean_parser for Latest Release !!!!\n')
+prints('!!!! Check https://github.com/jeestr4d/glean-parse for Latest Release !!!!\n')
 prints('To use a non-default Login Domain, enter apic#DOMAIN\\\\USERNAME')
 username, password = get_credentials()
 
